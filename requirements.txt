@@ -1,0 +1,8 @@
+fire
+matplotlib
+opensearch-py
+Pillow
+requests
+torchvision
+tqdm
+boto3
