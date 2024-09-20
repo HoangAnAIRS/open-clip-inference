@@ -21,7 +21,7 @@ DEVICE = config.get("device", "cuda" if torch.cuda.is_available() else "cpu")
 def find_images(directory):
     valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif')
     images = []
-    for root, _, files in os.walk(directory):
+    for root, _, files in tqdm(os.walk(directory)):
         for file in files:
             if file.lower().endswith(valid_extensions):
                 images.append(os.path.join(root, file))
@@ -103,7 +103,7 @@ def main():
         for batch_ids, batch_inputs in tqdm(dataloader):
             batch_inputs = batch_inputs.to(DEVICE, non_blocking=True)
 
-            with torch.no_grad(), torch.cuda.amp.autocast():
+            with torch.no_grad(), torch.amp.autocast("cpu"):
                 batch_features = model.encode_image(batch_inputs)
                 batch_features /= batch_features.norm(dim=-1, keepdim=True)
                 batch_features = batch_features.cpu()

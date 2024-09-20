@@ -1,6 +1,6 @@
-root: "/mnt/md0/projects/image_search/images_300k"
-device: "cuda:0"
-output: "/home/anhoangvan/Projects/nearest_vector_visualizer/data/pixta-390k"
+root: "/mnt/projects/"
+device: "cuda"
+output: "/home/ubuntu/open-clip-inference"
 
 # model_name: "ViT-B/32"
 # model_name: "laion/CLIP-ViT-B-32-laion2B-s34B-b79K"   
