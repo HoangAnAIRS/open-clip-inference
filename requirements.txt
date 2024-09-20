@@ -1,9 +1,9 @@
 fire
-matplotlib
-opensearch-py
-Pillow
-requests
-torchvision
-tqdm
 boto3
 pandas
+tqdm
+Pillow
+matplotlib
+opensearch-py
+requests
+torchvision
