@@ -6,7 +6,6 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from open_clip import create_model_from_pretrained
 from tqdm import tqdm
-import numpy as np
 import h5py
 
 # Load configuration from YAML file
@@ -18,10 +17,18 @@ output = config["output"]
 model_name = config["model_name"]
 DEVICE = config.get("device", "cuda" if torch.cuda.is_available() else "cpu")
 
-# Filter image files
-valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif')
-images = [os.path.join(root, file) for file in os.listdir(root)
-          if file.lower().endswith(valid_extensions)]
+# Function to recursively find image files
+def find_images(directory):
+    valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif')
+    images = []
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.lower().endswith(valid_extensions):
+                images.append(os.path.join(root, file))
+    return images
+
+# Find all images in the directory structure
+images = find_images(root)
 
 # Custom Dataset class
 class ImageDataset(Dataset):
@@ -74,7 +81,7 @@ def main():
 
     # Prepare output HDF5 file
     backbone = model_name.split("/")[-1]
-    dtype = 'float32'
+    dtype = 'float16'
     hdf5_path = os.path.join(output, f"image_features_{backbone}_{dtype}.h5")
 
     with h5py.File(hdf5_path, 'w') as h5f:
@@ -105,7 +112,6 @@ def main():
             batch_size_actual = batch_features.shape[0]
             features_ds.resize(features_ds.shape[0] + batch_size_actual, axis=0)
             features_ds[-batch_size_actual:] = batch_features
-            # get the features_ds and print it
 
             ids_ds.resize(ids_ds.shape[0] + batch_size_actual, axis=0)
             ids_ds[-batch_size_actual:] = batch_ids
