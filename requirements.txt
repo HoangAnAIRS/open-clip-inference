@@ -6,3 +6,4 @@ requests
 torchvision
 tqdm
 boto3
+pandas
