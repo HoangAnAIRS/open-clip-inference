@@ -7,3 +7,4 @@ matplotlib
 opensearch-py
 requests
 pyarrow
+gdown

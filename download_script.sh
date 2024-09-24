@@ -1,1 +1,0 @@
-python3 download_s3_in_parallel.py --csv_file_path 000.csv --download_folder /home/ubuntu/open-clip-inference --max_workers 8
