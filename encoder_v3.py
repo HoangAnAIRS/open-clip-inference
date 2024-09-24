@@ -103,7 +103,7 @@ def main():
         for batch_ids, batch_inputs in tqdm(dataloader):
             batch_inputs = batch_inputs.to(DEVICE, non_blocking=True)
 
-            with torch.no_grad(), torch.amp.autocast("cpu"):
+            with torch.no_grad(), torch.amp.autocast("cuda"):
                 batch_features = model.encode_image(batch_inputs)
                 batch_features /= batch_features.norm(dim=-1, keepdim=True)
                 batch_features = batch_features.cpu()

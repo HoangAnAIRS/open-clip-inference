@@ -2,11 +2,11 @@ fire
 boto3
 pandas
 tqdm
-yaml
+PyYAML
 h5py
 Pillow
 matplotlib
-opensearch-py
 requests
+torch
 torchvision
 open_clip_torch

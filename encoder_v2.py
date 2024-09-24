@@ -18,7 +18,20 @@ with open("config/encoder.yaml", 'r') as f:
     config = yaml.safe_load(f)
     
 root = config["root"]
-images = [os.path.join(root, file) for file in os.listdir(root)]
+
+# Function to recursively find image files
+def find_images(directory):
+    valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif')
+    images = []
+    for root, _, files in tqdm(os.walk(directory)):
+        for file in files:
+            if file.lower().endswith(valid_extensions):
+                images.append(os.path.join(root, file))
+    return images
+
+# Find all images in the directory structure
+images = find_images(root)
+
 DEVICE = config["device"]
 output = config["output"]
 model_name = config["model_name"]
@@ -69,7 +82,7 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     # Set batch size
-    batch_size = 8  # Increased batch size
+    batch_size = config.get("batch_size", 128)  # Increased batch size
 
     # Create DataLoader
     dataset = ImageDataset(images, preprocess)
@@ -86,7 +99,7 @@ def main():
     for batch_ids, batch_inputs in tqdm(dataloader):
         batch_inputs = batch_inputs.to(DEVICE, non_blocking=True)
         
-        with torch.no_grad():  # Enable automatic mixed precision
+        with torch.no_grad(), torch.amp.autocast("cuda"):  # Enable automatic mixed precision
             batch_features = model.encode_image(batch_inputs)
         
         batch_features /= batch_features.norm(dim=-1, keepdim=True)
