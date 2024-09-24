@@ -1,8 +1,0 @@
-root: "/mnt/md0/projects/image_search/images_300k"
-device: "cuda:0"
-output: "/home/anhoangvan/Projects/nearest_vector_visualizer/data/pixta-390k"
-
-# model_name: "ViT-B/32"
-# model_name: "laion/CLIP-ViT-B-32-laion2B-s34B-b79K"   
-# model_name: "laion/CLIP-ViT-H-14-laion2B-s32B-b79K"   
-model_name: "apple/DFN5B-CLIP-ViT-H-14-378"
