@@ -1,1 +1,1 @@
-python3 download_s3_in_parallel.py --instance_id 1 --parquet_dir_path /mnt/md0/projects/image_search/item_ids_parquet  --download_folder /home/anhoangvan/Projects/open-clip-inference --log_folder /home/anhoangvan/Projects/open-clip-inference/logs
+python3 download_s3_in_parallel.py --instance_id 1 --parquet_dir_path item_ids_parquet  --download_folder /mnt/images --log_folder logs
