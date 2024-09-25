@@ -6,6 +6,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import gc
 import glob
 from tqdm import tqdm
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 class S3Downloader:
     def __init__(self, aws_access_key_id, aws_secret_access_key, bucket_name):
@@ -47,60 +52,62 @@ def process_parquet_in_chunks(parquet_file_path, chunk_size):
     for start in range(0, total_rows, chunk_size):
         end = start + chunk_size
         yield parquet_file.iloc[start:end].values.tolist(), total_rows
+
+def process_parquet_file(parquet_file_path, downloader, download_folder, max_workers, log_folder):
+    parquet_file_name = os.path.basename(parquet_file_path)
+    success_log_path = os.path.join(log_folder, f"{parquet_file_name}_success.log")
+    error_log_path = os.path.join(log_folder, f"{parquet_file_name}_error.log")
+    
+    with open(success_log_path, 'a') as success_log, open(error_log_path, 'a') as error_log:
+        print(f"Processing file: {parquet_file_path}", file=success_log)
         
-def process_parquet_files_in_directory(directory, downloader, download_folder, max_workers, log_folder):
-    parquet_files = sorted(glob.glob(os.path.join(directory, "*.parquet")))
+        parquet_file = pd.read_parquet(parquet_file_path, engine='pyarrow')
+        total_rows = len(parquet_file)
+        chunk_size = 100000
 
-    with tqdm(total=len(parquet_files), desc="Processing Parquet Files", position=0) as file_pbar:
-        for parquet_file_path in parquet_files:
-            parquet_file_name = os.path.basename(parquet_file_path)
-            success_log_path = os.path.join(log_folder, f"{parquet_file_name}_success.log")
-            error_log_path = os.path.join(log_folder, f"{parquet_file_name}_error.log")
-            
-            with open(success_log_path, 'a') as success_log, open(error_log_path, 'a') as error_log:
-                print(f"Processing file: {parquet_file_path}", file=success_log)
-                
-                parquet_file = pd.read_parquet(parquet_file_path, engine='pyarrow')
-                total_rows = len(parquet_file)
-                chunk_size = 100000
+        with tqdm(total=total_rows, desc=f"Processing {parquet_file_name}", position=1, leave=False) as row_pbar:
+            for chunk, _ in process_parquet_in_chunks(parquet_file_path, chunk_size):
+                with tqdm(total=len(chunk), desc="Downloading", position=2, leave=False) as download_pbar:
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        futures = [
+                            executor.submit(
+                                downloader.download_file_from_s3,
+                                row[0],
+                                download_folder,
+                                success_log,
+                                error_log
+                            )
+                            for row in chunk
+                        ]
 
-                with tqdm(total=total_rows, desc=f"Processing {parquet_file_name}", position=1, leave=False) as row_pbar:
-                    for chunk, _ in process_parquet_in_chunks(parquet_file_path, chunk_size):
-                        with tqdm(total=len(chunk), desc="Downloading", position=2, leave=False) as download_pbar:
-                            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                                futures = [
-                                    executor.submit(
-                                        downloader.download_file_from_s3,
-                                        row[0],
-                                        download_folder,
-                                        success_log,
-                                        error_log
-                                    )
-                                    for row in chunk
-                                ]
+                        for future in as_completed(futures):
+                            try:
+                                result = future.result()
+                                download_pbar.update(1)
+                            except Exception as e:
+                                print(f"Error: {e}", file=error_log)
+                                download_pbar.update(1)
 
-                                for future in as_completed(futures):
-                                    try:
-                                        result = future.result()
-                                        download_pbar.update(1)
-                                    except Exception as e:
-                                        print(f"Error: {e}", file=error_log)
-                                        download_pbar.update(1)
+                row_pbar.update(len(chunk))
+                gc.collect()  # Trigger garbage collection
 
-                        row_pbar.update(len(chunk))
-                        gc.collect()  # Trigger garbage collection
+def get_file_range(instance_id, file_list):
+    file_ranges = [0, 17, 31, 45, 63, 77, 91, 105, 120]
+    start_index = file_ranges[instance_id - 1]
+    end_index = file_ranges[instance_id]
+    return file_list[start_index:end_index]
 
-            file_pbar.update(1)
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Download files from S3 based on item IDs in Parquet files")
-
+def main():
+    parser = argparse.ArgumentParser(description="Distributed S3 file download based on Parquet files")
+    parser.add_argument("--instance_id", type=int, required=True, help="ID of this instance (1-8)")
     parser.add_argument("--parquet_dir_path", required=True, help="Path to the directory containing Parquet files")
     parser.add_argument("--download_folder", required=True, help="Folder to download the files to")
     parser.add_argument("--log_folder", required=True, help="Folder to store success and error logs")
     parser.add_argument("--max_workers", type=int, default=10, help="Maximum number of download threads")
-
     args = parser.parse_args()
+
+    if not 1 <= args.instance_id <= 8:
+        raise ValueError("Instance ID must be between 1 and 8")
 
     if not os.path.exists(args.log_folder):
         os.makedirs(args.log_folder)
@@ -111,10 +118,27 @@ if __name__ == "__main__":
         bucket_name="pixta-image-product-jp"
     )
 
-    process_parquet_files_in_directory(
-        args.parquet_dir_path,
-        downloader,
-        args.download_folder,
-        args.max_workers,
-        args.log_folder
-    )
+    # Get all parquet files in the input folder
+    all_files = sorted(glob.glob(os.path.join(args.parquet_dir_path, "*.parquet")))
+    
+    if len(all_files) != 120:
+        print(f"Warning: Expected 120 files, but found {len(all_files)}")
+
+    # Get the files this instance should process
+    files_to_process = get_file_range(args.instance_id, all_files)
+    
+    logging.info(f"Instance ID: {args.instance_id}")
+    logging.info(f"Files to process: {files_to_process}")
+    logging.info(f"Instance {args.instance_id} will process {len(files_to_process)} files")
+
+    for parquet_file in tqdm(files_to_process, desc="Processing Parquet Files", position=0):
+        process_parquet_file(
+            parquet_file,
+            downloader,
+            args.download_folder,
+            args.max_workers,
+            args.log_folder
+        )
+
+if __name__ == "__main__":
+    main()
