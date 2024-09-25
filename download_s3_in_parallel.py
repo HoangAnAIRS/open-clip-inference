@@ -47,43 +47,48 @@ def process_parquet_in_chunks(parquet_file_path, chunk_size):
     for start in range(0, total_rows, chunk_size):
         end = start + chunk_size
         yield parquet_file.iloc[start:end].values.tolist(), total_rows
-
-def process_parquet_files_in_directory(directory, downloader, download_folder, max_workers, success_log, error_log):
+        
+def process_parquet_files_in_directory(directory, downloader, download_folder, max_workers, log_folder):
     parquet_files = sorted(glob.glob(os.path.join(directory, "*.parquet")))
 
     with tqdm(total=len(parquet_files), desc="Processing Parquet Files", position=0) as file_pbar:
         for parquet_file_path in parquet_files:
-            print(f"Processing file: {parquet_file_path}", file=success_log)
+            parquet_file_name = os.path.basename(parquet_file_path)
+            success_log_path = os.path.join(log_folder, f"{parquet_file_name}_success.log")
+            error_log_path = os.path.join(log_folder, f"{parquet_file_name}_error.log")
             
-            parquet_file = pd.read_parquet(parquet_file_path, engine='pyarrow')
-            total_rows = len(parquet_file)
-            chunk_size = 100000
+            with open(success_log_path, 'a') as success_log, open(error_log_path, 'a') as error_log:
+                print(f"Processing file: {parquet_file_path}", file=success_log)
+                
+                parquet_file = pd.read_parquet(parquet_file_path, engine='pyarrow')
+                total_rows = len(parquet_file)
+                chunk_size = 100000
 
-            with tqdm(total=total_rows, desc=f"Processing {os.path.basename(parquet_file_path)}", position=1, leave=False) as row_pbar:
-                for chunk, _ in process_parquet_in_chunks(parquet_file_path, chunk_size):
-                    with tqdm(total=len(chunk), desc="Downloading", position=2, leave=False) as download_pbar:
-                        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                            futures = [
-                                executor.submit(
-                                    downloader.download_file_from_s3,
-                                    row[0],
-                                    download_folder,
-                                    success_log,
-                                    error_log
-                                )
-                                for row in chunk
-                            ]
+                with tqdm(total=total_rows, desc=f"Processing {parquet_file_name}", position=1, leave=False) as row_pbar:
+                    for chunk, _ in process_parquet_in_chunks(parquet_file_path, chunk_size):
+                        with tqdm(total=len(chunk), desc="Downloading", position=2, leave=False) as download_pbar:
+                            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                                futures = [
+                                    executor.submit(
+                                        downloader.download_file_from_s3,
+                                        row[0],
+                                        download_folder,
+                                        success_log,
+                                        error_log
+                                    )
+                                    for row in chunk
+                                ]
 
-                            for future in as_completed(futures):
-                                try:
-                                    result = future.result()
-                                    download_pbar.update(1)
-                                except Exception as e:
-                                    print(f"Error: {e}", file=error_log)
-                                    download_pbar.update(1)
+                                for future in as_completed(futures):
+                                    try:
+                                        result = future.result()
+                                        download_pbar.update(1)
+                                    except Exception as e:
+                                        print(f"Error: {e}", file=error_log)
+                                        download_pbar.update(1)
 
-                    row_pbar.update(len(chunk))
-                    gc.collect()  # Trigger garbage collection
+                        row_pbar.update(len(chunk))
+                        gc.collect()  # Trigger garbage collection
 
             file_pbar.update(1)
 
@@ -100,21 +105,16 @@ if __name__ == "__main__":
     if not os.path.exists(args.log_folder):
         os.makedirs(args.log_folder)
 
-    success_log_path = os.path.join(args.log_folder, "success_log.txt")
-    error_log_path = os.path.join(args.log_folder, "error_log.txt")
-
     downloader = S3Downloader(
         aws_access_key_id=os.environ.get('AWS_ACCESS_KEY'),
         aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
         bucket_name="pixta-image-product-jp"
     )
 
-    with open(success_log_path, 'a') as success_log, open(error_log_path, 'a') as error_log:
-        process_parquet_files_in_directory(
-            args.parquet_dir_path,
-            downloader,
-            args.download_folder,
-            args.max_workers,
-            success_log,
-            error_log
-        )
+    process_parquet_files_in_directory(
+        args.parquet_dir_path,
+        downloader,
+        args.download_folder,
+        args.max_workers,
+        args.log_folder
+    )
