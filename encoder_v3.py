@@ -66,8 +66,6 @@ def setup_logger(log_file):
     return logger
 
 def process_subfolder(subfolder, model, preprocess, output_dir, logger):
-    if subfolder == "lost+found":
-        return
     t1 = time.time()
     
     # Find images in the subfolder
@@ -143,7 +141,9 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     # Process each subfolder
-    for subfolder in os.listdir(root):
+    for subfolder in sorted(os.listdir(root)):
+        if subfolder == "output" or subfolder == "lost+found":
+            continue
         subfolder_path = os.path.join(root, subfolder)
         if os.path.isdir(subfolder_path):
             log_file = os.path.join(log_folder, f"{subfolder}_log.txt")
