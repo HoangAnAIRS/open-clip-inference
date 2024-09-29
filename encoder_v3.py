@@ -66,7 +66,7 @@ def setup_logger(log_file):
     return logger
 
 def process_subfolder(subfolder, model, preprocess, output_dir, logger):
-    if subfolder == "lost_found":
+    if subfolder == "lost+found":
         return
     t1 = time.time()
     
