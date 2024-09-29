@@ -1,6 +1,6 @@
 root: "/mnt/images/"
 device: "cuda"
-output: "/mnt/output"
+output: "/mnt/images/output"
 batch_size: 512
 log_folder: "logs"
 
