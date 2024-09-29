@@ -66,6 +66,8 @@ def setup_logger(log_file):
     return logger
 
 def process_subfolder(subfolder, model, preprocess, output_dir, logger):
+    if subfolder == "lost_found":
+        return
     t1 = time.time()
     
     # Find images in the subfolder
